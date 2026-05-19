@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   BarChart, 
   Bar, 
@@ -9,8 +9,8 @@ import {
   ResponsiveContainer,
   Cell
 } from 'recharts';
-import { Search, Sun, Loader2, AlertCircle, Calendar, ShieldCheck } from 'lucide-react';
-import { getCityCoordinates, getMonthlyUVData } from './services/api';
+import { Search, Sun, Loader2, AlertCircle, Calendar, ShieldCheck, MapPin, Info } from 'lucide-react';
+import { getCityCoordinates, getMonthlyUVData, getCitySuggestions, getCityFromCoords } from './services/api';
 import type { MonthlyUV } from './services/api';
 import { Button } from './components/ui/button';
 import { Card, CardContent } from './components/ui/card';
@@ -52,6 +52,34 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+const SafetyGuide = () => (
+  <Card className="border-none shadow-md bg-white rounded-2xl overflow-hidden">
+    <CardContent className="p-4 sm:p-6 space-y-4">
+      <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+        <Info className="text-slate-900" size={20} />
+        <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">UV Safety Guide</h3>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {[
+          { range: "0 - 2 (Low)", advice: "No protection required. You can safely stay outside.", color: "bg-emerald-600" },
+          { range: "3 - 5 (Moderate)", advice: "Seek shade during midday. Wear a hat and sunscreen.", color: "bg-yellow-600" },
+          { range: "6 - 7 (High)", advice: "Protection required. Reduce time in the sun between 10am and 4pm.", color: "bg-orange-600" },
+          { range: "8 - 10 (Very High)", advice: "Extra protection needed. Avoid sun during midday hours. Wear protective clothing.", color: "bg-red-600" },
+          { range: "11+ (Extreme)", advice: "Take all precautions. Unprotected skin can burn in minutes. Stay indoors.", color: "bg-purple-600" },
+        ].map((item) => (
+          <div key={item.range} className="flex gap-3 items-start p-3 bg-slate-50 rounded-xl border border-slate-100">
+            <div className={`w-3 h-3 rounded-full ${item.color} shrink-0 mt-1`} />
+            <div className="space-y-1">
+              <p className="text-xs font-black text-slate-900 leading-none">{item.range}</p>
+              <p className="text-[11px] font-bold text-slate-600 leading-relaxed">{item.advice}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </CardContent>
+  </Card>
+);
+
 function App() {
   const [city, setCity] = useState('');
   const [year, setYear] = useState('2025');
@@ -59,8 +87,55 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<MonthlyUV[]>([]);
   const [cityInfo, setCityInfo] = useState<CityInfo | null>(null);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionRef = useRef<HTMLDivElement>(null);
 
   const years = Array.from({ length: 10 }, (_, i) => (2025 - i).toString());
+
+  // Autocomplete logic
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(async () => {
+      if (city.length >= 2 && !cityInfo) {
+        const results = await getCitySuggestions(city);
+        setSuggestions(results);
+        setShowSuggestions(true);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [city, cityInfo]);
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (suggestionRef.current && !suggestionRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const fetchDataByCoords = async (lat: number, lon: number, name: string, country: string, searchYear: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const currentCityInfo = { name, country, lat, lon };
+      setCityInfo(currentCityInfo);
+      setCity(name);
+      const uvData = await getMonthlyUVData(lat, lon, parseInt(searchYear));
+      setData(uvData);
+    } catch (err: any) {
+      setError(err.message || 'An error occurred');
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchData = async (searchCity: string, searchYear: string) => {
     setLoading(true);
@@ -86,6 +161,7 @@ function App() {
     e.preventDefault();
     if (!city.trim()) return;
     fetchData(city, year);
+    setShowSuggestions(false);
   };
 
   const handleYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -94,18 +170,49 @@ function App() {
     if (cityInfo) fetchData(cityInfo.name, newYear);
   };
 
+  const handleSuggestionClick = (suggestion: any) => {
+    setCity(suggestion.name);
+    fetchDataByCoords(suggestion.latitude, suggestion.longitude, suggestion.name, suggestion.country, year);
+    setShowSuggestions(false);
+  };
+
+  const handleLocationDetection = () => {
+    if (!navigator.geolocation) {
+      setError("Geolocation is not supported by your browser");
+      return;
+    }
+
+    setLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+          const info = await getCityFromCoords(latitude, longitude);
+          fetchDataByCoords(latitude, longitude, info.name, info.country, year);
+        } catch (err) {
+          setError("Could not detect your city name, but showing data for your coordinates.");
+          const { latitude, longitude } = position.coords;
+          fetchDataByCoords(latitude, longitude, "My Location", "", year);
+        }
+      },
+      () => {
+        setError("Location access denied.");
+        setLoading(false);
+      }
+    );
+  };
+
   const getBarColor = (uv: number) => {
-    if (uv < 3) return '#059669'; // Darker Emerald
-    if (uv < 6) return '#d97706'; // Darker Amber/Yellow
-    if (uv < 8) return '#ea580c'; // Darker Orange
-    if (uv < 11) return '#dc2626'; // Darker Red
-    return '#7c3aed'; // Darker Purple
+    if (uv < 3) return '#059669';
+    if (uv < 6) return '#d97706';
+    if (uv < 8) return '#ea580c';
+    if (uv < 11) return '#dc2626';
+    return '#7c3aed';
   };
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans p-2 sm:p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
-        {/* Header - High Contrast */}
         <header className="flex items-center justify-between px-2 pt-2">
           <div className="flex items-center gap-2">
             <Sun className="text-orange-600" size={28} />
@@ -116,44 +223,76 @@ function App() {
           </p>
         </header>
 
-        {/* Responsive Search Section */}
-        <Card className="border-none shadow-md bg-white overflow-hidden rounded-xl border-b-2 border-slate-200">
-          <CardContent className="p-0">
-            <form onSubmit={handleSearch} className="flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
-              <div className="flex-1 flex items-center px-4 py-3 sm:py-0 gap-3">
-                <Search className="text-slate-500" size={20} />
-                <input
-                  type="text"
-                  placeholder="Search city (e.g. Tokyo)..."
-                  className="w-full h-8 sm:h-12 bg-transparent outline-none text-base font-bold text-slate-900 placeholder:text-slate-400"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-              <div className="flex divide-x divide-slate-100 bg-slate-50/50">
-                <div className="relative flex-1 sm:flex-none">
-                  <Select 
-                    value={year} 
-                    onChange={handleYearChange}
-                    className="h-12 w-full sm:w-28 bg-transparent border-none appearance-none pl-10 pr-4 font-black text-sm text-slate-800 cursor-pointer focus:ring-0"
+        <div className="relative" ref={suggestionRef}>
+          <Card className="border-none shadow-md bg-white overflow-hidden rounded-xl border-b-2 border-slate-200">
+            <CardContent className="p-0">
+              <form onSubmit={handleSearch} className="flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
+                <div className="flex-1 flex items-center px-4 py-3 sm:py-0 gap-3">
+                  <Search className="text-slate-500" size={20} />
+                  <input
+                    type="text"
+                    placeholder="Search city (e.g. Tokyo)..."
+                    className="w-full h-8 sm:h-12 bg-transparent outline-none text-base font-bold text-slate-900 placeholder:text-slate-400"
+                    value={city}
+                    onChange={(e) => {
+                      setCity(e.target.value);
+                      if (cityInfo) setCityInfo(null);
+                    }}
                     disabled={loading}
+                    onFocus={() => city.length >= 2 && setShowSuggestions(true)}
+                  />
+                  <button 
+                    type="button"
+                    onClick={handleLocationDetection}
+                    className="p-2 text-slate-400 hover:text-orange-600 transition-colors"
+                    title="Use my location"
                   >
-                    {years.map(y => <option key={y} value={y}>{y}</option>)}
-                  </Select>
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none" size={16} />
+                    <MapPin size={20} />
+                  </button>
                 </div>
-                <Button 
-                  type="submit" 
-                  disabled={loading || !city.trim()}
-                  className="h-12 px-6 sm:px-8 rounded-none bg-orange-600 hover:bg-orange-700 text-white transition-colors shrink-0 active:scale-95"
+                <div className="flex divide-x divide-slate-100 bg-slate-50/50">
+                  <div className="relative flex-1 sm:flex-none">
+                    <Select 
+                      value={year} 
+                      onChange={handleYearChange}
+                      className="h-12 w-full sm:w-28 bg-transparent border-none appearance-none pl-10 pr-4 font-black text-sm text-slate-800 cursor-pointer focus:ring-0"
+                      disabled={loading}
+                    >
+                      {years.map(y => <option key={y} value={y}>{y}</option>)}
+                    </Select>
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none" size={16} />
+                  </div>
+                  <Button 
+                    type="submit" 
+                    disabled={loading || !city.trim()}
+                    className="h-12 px-6 sm:px-8 rounded-none bg-orange-600 hover:bg-orange-700 text-white transition-colors shrink-0 active:scale-95"
+                  >
+                    {loading ? <Loader2 className="animate-spin" size={20} /> : <span className="text-sm font-black uppercase tracking-wider">Search</span>}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Autocomplete Suggestions */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute z-50 w-full mt-1 bg-white rounded-xl shadow-2xl border border-slate-100 overflow-hidden divide-y divide-slate-50">
+              {suggestions.map((s, i) => (
+                <button
+                  key={`${s.name}-${i}`}
+                  onClick={() => handleSuggestionClick(s)}
+                  className="w-full px-5 py-3 text-left hover:bg-slate-50 flex items-center justify-between transition-colors group"
                 >
-                  {loading ? <Loader2 className="animate-spin" size={20} /> : <span className="text-sm font-black uppercase tracking-wider">Search</span>}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-slate-900">{s.name}</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{s.country}</span>
+                  </div>
+                  <Sun size={14} className="text-slate-200 group-hover:text-orange-400 transition-colors" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {error && (
           <div className="flex items-center gap-3 p-4 bg-red-100 text-red-900 rounded-xl border-l-4 border-red-600 animate-in fade-in slide-in-from-left-2">
@@ -162,12 +301,11 @@ function App() {
           </div>
         )}
 
-        {/* Main Graph Card */}
         <Card className="border-none shadow-lg bg-white rounded-2xl overflow-hidden min-h-[450px] flex flex-col">
           {loading ? (
             <div className="flex-1 flex flex-col items-center justify-center space-y-4">
               <Loader2 className="animate-spin text-orange-600" size={48} />
-              <p className="text-slate-900 font-black text-xs uppercase tracking-[0.3em]">Loading NASA Data...</p>
+              <p className="text-slate-900 font-black text-xs uppercase tracking-[0.3em]">Processing...</p>
             </div>
           ) : data.length > 0 ? (
             <div className="p-4 sm:p-8 space-y-8 flex-1 flex flex-col">
@@ -194,22 +332,9 @@ function App() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data} margin={{ top: 20, right: 10, left: -25, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="0" vertical={false} stroke="#f1f5f9" />
-                    <XAxis 
-                      dataKey="month" 
-                      axisLine={{ stroke: '#94a3b8', strokeWidth: 2 }} 
-                      tickLine={false} 
-                      tick={{ fill: '#1e293b', fontSize: 11, fontWeight: 900 }} 
-                      dy={10} 
-                    />
-                    <YAxis 
-                      axisLine={{ stroke: '#94a3b8', strokeWidth: 2 }} 
-                      tickLine={false} 
-                      tick={{ fill: '#1e293b', fontSize: 11, fontWeight: 700 }} 
-                    />
-                    <Tooltip 
-                      content={<CustomTooltip />} 
-                      cursor={{ fill: '#f1f5f9', radius: 4 }} 
-                    />
+                    <XAxis dataKey="month" axisLine={{ stroke: '#94a3b8', strokeWidth: 2 }} tickLine={false} tick={{ fill: '#1e293b', fontSize: 11, fontWeight: 900 }} dy={10} />
+                    <YAxis axisLine={{ stroke: '#94a3b8', strokeWidth: 2 }} tickLine={false} tick={{ fill: '#1e293b', fontSize: 11, fontWeight: 700 }} />
+                    <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f1f5f9', radius: 4 }} />
                     <Bar dataKey="uvIndex" radius={[4, 4, 0, 0]} barSize={35}>
                       {data.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={getBarColor(entry.uvIndex)} />
@@ -249,7 +374,9 @@ function App() {
           )}
         </Card>
 
-        {/* High Contrast Footer */}
+        {/* Safety Guide Section */}
+        <SafetyGuide />
+
         <footer className="text-center py-6 space-y-2">
           <p className="text-slate-900 text-[10px] font-black uppercase tracking-[0.3em]">Scientific Integrity: NASA POWER</p>
           <div className="space-y-1">

@@ -1,6 +1,29 @@
+export async function getCityFromCoords(lat: number, lon: number) {
+  // Use Nominatim (OSM) for free reverse geocoding.
+  const osmResponse = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`
+  );
+  const data = await osmResponse.json();
+  const address = data.address;
+  const name = address.city || address.town || address.village || address.suburb || "Unknown City";
+  const country = address.country || "Unknown Country";
+  return { name, country };
+}
+
 export interface MonthlyUV {
   month: string;
   uvIndex: number;
+}
+
+export async function getCitySuggestions(query: string) {
+  if (query.length < 2) return [];
+  const response = await fetch(
+    `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
+      query
+    )}&count=5&language=en&format=json`
+  );
+  const data = await response.json();
+  return data.results || [];
 }
 
 export async function getCityCoordinates(city: string) {
