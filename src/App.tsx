@@ -53,7 +53,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         <p className="text-slate-900 font-bold uppercase text-[10px] mb-1">{label}</p>
         <div className="flex items-center gap-1.5 mb-1.5">
           <span className={`text-2xl font-black ${colorClass}`}>{uv}</span>
-          <span className="text-slate-600 font-bold text-[11px] uppercase">UV Index</span>
+          <span className="text-slate-400 font-bold text-[11px] uppercase">UV Index</span>
         </div>
         <div className="flex items-center gap-1.5 pt-1.5 border-t border-slate-100">
           <ShieldCheck size={14} className={colorClass} />
@@ -66,31 +66,53 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 const SafetyGuide = () => (
-  <Card className="border-none shadow-md bg-white rounded-2xl overflow-hidden">
-    <CardContent className="p-4 sm:p-6 space-y-4">
-      <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-        <Info className="text-slate-900" size={20} />
-        <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">UV Safety Guide</h3>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {[
-          { range: "0 - 2 (Low)", advice: "No protection required. You can safely stay outside.", color: "bg-emerald-600" },
-          { range: "3 - 5 (Moderate)", advice: "Seek shade during midday. Wear a hat and sunscreen.", color: "bg-yellow-600" },
-          { range: "6 - 7 (High)", advice: "Protection required. Reduce time in the sun between 10am and 4pm.", color: "bg-orange-600" },
-          { range: "8 - 10 (Very High)", advice: "Extra protection needed. Avoid sun during midday hours. Wear protective clothing.", color: "bg-red-600" },
-          { range: "11+ (Extreme)", advice: "Take all precautions. Unprotected skin can burn in minutes. Stay indoors.", color: "bg-purple-600" },
-        ].map((item) => (
-          <div key={item.range} className="flex gap-3 items-start p-3 bg-slate-50 rounded-xl border border-slate-100">
-            <div className={`w-3 h-3 rounded-full ${item.color} shrink-0 mt-1`} />
-            <div className="space-y-1">
-              <p className="text-xs font-black text-slate-900 leading-none">{item.range}</p>
-              <p className="text-[11px] font-bold text-slate-600 leading-relaxed">{item.advice}</p>
+  <div className="space-y-4">
+    <Card className="border-none shadow-md bg-white rounded-2xl overflow-hidden">
+      <CardContent className="p-4 sm:p-6 space-y-4">
+        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+          <Info className="text-slate-900" size={20} />
+          <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">UV Safety Guide</h3>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {[
+            { range: "0 - 2 (Low)", advice: "No protection required. You can safely stay outside.", color: "bg-emerald-600" },
+            { range: "3 - 5 (Moderate)", advice: "Seek shade during midday. Wear a hat and sunscreen.", color: "bg-yellow-600" },
+            { range: "6 - 7 (High)", advice: "Protection required. Reduce time in the sun between 10am and 4pm.", color: "bg-orange-600" },
+            { range: "8 - 10 (Very High)", advice: "Extra protection needed. Avoid sun during midday hours. Wear protective clothing.", color: "bg-red-600" },
+            { range: "11+ (Extreme)", advice: "Take all precautions. Unprotected skin can burn in minutes. Stay indoors.", color: "bg-purple-600" },
+          ].map((item) => (
+            <div key={item.range} className="flex gap-3 items-start p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <div className={`w-3 h-3 rounded-full ${item.color} shrink-0 mt-1`} />
+              <div className="space-y-1">
+                <p className="text-xs font-black text-slate-900 leading-none">{item.range}</p>
+                <p className="text-[11px] font-bold text-slate-600 leading-relaxed">{item.advice}</p>
+              </div>
             </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+
+    <Card className="border-none shadow-sm bg-white rounded-2xl overflow-hidden border border-slate-100">
+      <CardContent className="p-4 sm:p-6 space-y-4">
+        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Understanding Data</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+          <div className="space-y-1.5">
+            <p className="text-xs font-black text-slate-900 uppercase">Average Peak</p>
+            <p className="text-[11px] font-medium text-slate-500 leading-relaxed">
+              Estimates intensity during the strongest hour (Noon). Matches standard weather forecasts.
+            </p>
           </div>
-        ))}
-      </div>
-    </CardContent>
-  </Card>
+          <div className="space-y-1.5">
+            <p className="text-xs font-black text-slate-900 uppercase">Monthly Average</p>
+            <p className="text-[11px] font-medium text-slate-500 leading-relaxed">
+              The 24-hour mean including nights/clouds. Primarily used for climate trend analysis.
+            </p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  </div>
 );
 
 function App() {
@@ -109,7 +131,6 @@ function App() {
 
   const years = Array.from({ length: 10 }, (_, i) => (2025 - i).toString());
 
-  // Load recent cities from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('recent_cities');
     if (saved) {
@@ -313,7 +334,6 @@ function App() {
             </CardContent>
           </Card>
 
-          {/* Autocomplete & Recent Cities */}
           {showSuggestions && (
             <div className="absolute z-50 w-full mt-1 bg-white rounded-xl shadow-2xl border border-slate-100 overflow-hidden divide-y divide-slate-50">
               {suggestions.length > 0 ? (
