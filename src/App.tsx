@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
   Cell
 } from 'recharts';
-import { Search, Sun, Loader2, AlertCircle, Calendar, ShieldCheck, MapPin, Info, Zap, TrendingUp, BarChart2 } from 'lucide-react';
+import { Search, Sun, Loader2, AlertCircle, Calendar, ShieldCheck, MapPin, Info, Zap, TrendingUp, BarChart2, History, X } from 'lucide-react';
 import { getCityCoordinates, getMonthlyUVData, getCitySuggestions, getCityFromCoords, getCurrentUV } from './services/api';
 import type { MonthlyUV } from './services/api';
 import { Button } from './components/ui/button';
@@ -27,6 +27,13 @@ interface CityInfo {
 interface LiveUV {
   current: number;
   todayMax: number;
+}
+
+interface RecentCity {
+  name: string;
+  country: string;
+  lat: number;
+  lon: number;
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -89,7 +96,7 @@ const SafetyGuide = () => (
 function App() {
   const [city, setCity] = useState('');
   const [year, setYear] = useState('2025');
-  const [viewType, setViewType] = useState<'avg' | 'peak'>('peak'); // Default to peak for user expectation
+  const [viewType, setViewType] = useState<'avg' | 'peak'>('peak');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<MonthlyUV[]>([]);
@@ -97,9 +104,35 @@ function App() {
   const [liveUV, setLiveUV] = useState<LiveUV | null>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [recentCities, setRecentCities] = useState<RecentCity[]>([]);
   const suggestionRef = useRef<HTMLDivElement>(null);
 
   const years = Array.from({ length: 10 }, (_, i) => (2025 - i).toString());
+
+  // Load recent cities from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('recent_cities');
+    if (saved) {
+      try {
+        setRecentCities(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to parse recent cities");
+      }
+    }
+  }, []);
+
+  const saveRecentCity = (newCity: RecentCity) => {
+    const updated = [newCity, ...recentCities.filter(c => c.name !== newCity.name)].slice(0, 5);
+    setRecentCities(updated);
+    localStorage.setItem('recent_cities', JSON.stringify(updated));
+  };
+
+  const removeRecentCity = (name: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = recentCities.filter(c => c.name !== name);
+    setRecentCities(updated);
+    localStorage.setItem('recent_cities', JSON.stringify(updated));
+  };
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
@@ -140,6 +173,7 @@ function App() {
       
       setData(uvData);
       setLiveUV({ current: liveData.currentUV, todayMax: liveData.todayMax });
+      saveRecentCity({ name, country, lat, lon });
     } catch (err: any) {
       setError(err.message || 'An error occurred');
       setData([]);
@@ -167,6 +201,7 @@ function App() {
       
       setData(uvData);
       setLiveUV({ current: liveData.currentUV, todayMax: liveData.todayMax });
+      saveRecentCity({ name: currentCityInfo.name, country: currentCityInfo.country, lat: currentCityInfo.lat, lon: currentCityInfo.lon });
     } catch (err: any) {
       setError(err.message || 'An error occurred');
       setData([]);
@@ -237,7 +272,7 @@ function App() {
             <h1 className="text-2xl font-black tracking-tight text-slate-900">UV Index</h1>
           </div>
           <p className="text-slate-700 text-[10px] font-black uppercase tracking-[0.2em] hidden md:block">
-            NASA Scientific Archive
+            Scientific Archive • NASA
           </p>
         </header>
 
@@ -257,7 +292,7 @@ function App() {
                       if (cityInfo) setCityInfo(null);
                     }}
                     disabled={loading}
-                    onFocus={() => city.length >= 2 && setShowSuggestions(true)}
+                    onFocus={() => city.length >= 2 ? setShowSuggestions(true) : setShowSuggestions(false)}
                   />
                   <button type="button" onClick={handleLocationDetection} className="p-2 text-slate-400 hover:text-orange-600 transition-colors" title="Use my location">
                     <MapPin size={20} />
@@ -278,17 +313,39 @@ function App() {
             </CardContent>
           </Card>
 
-          {showSuggestions && suggestions.length > 0 && (
+          {/* Autocomplete & Recent Cities */}
+          {showSuggestions && (
             <div className="absolute z-50 w-full mt-1 bg-white rounded-xl shadow-2xl border border-slate-100 overflow-hidden divide-y divide-slate-50">
-              {suggestions.map((s, i) => (
-                <button key={`${s.name}-${i}`} onClick={() => handleSuggestionClick(s)} className="w-full px-5 py-3 text-left hover:bg-slate-50 flex items-center justify-between transition-colors group">
-                  <div className="flex flex-col">
-                    <span className="text-sm font-bold text-slate-900">{s.name}</span>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{s.country}</span>
-                  </div>
-                  <Sun size={14} className="text-slate-200 group-hover:text-orange-400 transition-colors" />
-                </button>
-              ))}
+              {suggestions.length > 0 ? (
+                suggestions.map((s, i) => (
+                  <button key={`${s.name}-${i}`} onClick={() => handleSuggestionClick(s)} className="w-full px-5 py-3 text-left hover:bg-slate-50 flex items-center justify-between transition-colors group">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-slate-900">{s.name}</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{s.country}</span>
+                    </div>
+                    <Sun size={14} className="text-slate-200 group-hover:text-orange-400 transition-colors" />
+                  </button>
+                ))
+              ) : city.length < 2 && recentCities.length > 0 && (
+                <div className="p-2">
+                  <p className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <History size={12} /> Recent Searches
+                  </p>
+                  {recentCities.map((c, i) => (
+                    <div key={`${c.name}-${i}`} className="flex items-center group">
+                      <button onClick={() => fetchDataByCoords(c.lat, c.lon, c.name, c.country, year)} className="flex-1 px-3 py-2.5 text-left hover:bg-slate-50 rounded-lg flex items-center justify-between transition-colors">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-slate-900">{c.name}</span>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{c.country}</span>
+                        </div>
+                      </button>
+                      <button onClick={(e) => removeRecentCity(c.name, e)} className="p-2 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -316,22 +373,17 @@ function App() {
                     <span className="text-slate-700 text-[10px] font-bold uppercase tracking-widest">{year} Analysis</span>
                   </div>
                 </div>
-                
                 {liveUV && (
                   <div className="flex flex-wrap gap-3 w-full lg:w-auto">
                     <div className="flex-1 sm:flex-none flex items-center gap-3 bg-orange-600 text-white p-3 rounded-xl shadow-lg shadow-orange-100 min-w-[140px]">
-                      <div className="bg-white/20 p-2 rounded-lg">
-                        <Zap size={20} className="fill-white" />
-                      </div>
+                      <div className="bg-white/20 p-2 rounded-lg"><Zap size={20} className="fill-white" /></div>
                       <div>
                         <p className="text-[9px] font-black uppercase tracking-widest leading-none opacity-80">Live UV Now</p>
                         <p className="text-xl font-black">{liveUV.current.toFixed(1)}</p>
                       </div>
                     </div>
                     <div className="flex-1 sm:flex-none flex items-center gap-3 bg-slate-900 text-white p-3 rounded-xl shadow-lg shadow-slate-100 min-w-[140px]">
-                      <div className="bg-white/10 p-2 rounded-lg text-orange-400">
-                        <Sun size={20} />
-                      </div>
+                      <div className="bg-white/10 p-2 rounded-lg text-orange-400"><Sun size={20} /></div>
                       <div>
                         <p className="text-[9px] font-black uppercase tracking-widest leading-none opacity-60">Today's Peak</p>
                         <p className="text-xl font-black">{liveUV.todayMax.toFixed(1)}</p>
@@ -341,28 +393,9 @@ function App() {
                 )}
               </div>
 
-              {/* AVG vs PEAK TOGGLE */}
               <div className="flex items-center justify-between gap-4 bg-slate-50 p-1.5 rounded-2xl border border-slate-100 w-fit">
-                <button
-                  onClick={() => setViewType('peak')}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
-                    viewType === 'peak' ? "bg-white text-orange-600 shadow-sm ring-1 ring-slate-200" : "text-slate-400 hover:text-slate-600"
-                  )}
-                >
-                  <TrendingUp size={14} />
-                  Average Peak
-                </button>
-                <button
-                  onClick={() => setViewType('avg')}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
-                    viewType === 'avg' ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200" : "text-slate-400 hover:text-slate-600"
-                  )}
-                >
-                  <BarChart2 size={14} />
-                  Monthly Average
-                </button>
+                <button onClick={() => setViewType('peak')} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all", viewType === 'peak' ? "bg-white text-orange-600 shadow-sm ring-1 ring-slate-200" : "text-slate-400 hover:text-slate-600")}><TrendingUp size={14} />Average Peak</button>
+                <button onClick={() => setViewType('avg')} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all", viewType === 'avg' ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200" : "text-slate-400 hover:text-slate-600")}><BarChart2 size={14} />Monthly Average</button>
               </div>
 
               <div className="w-full h-[350px] sm:h-[400px]">
@@ -372,11 +405,7 @@ function App() {
                     <XAxis dataKey="month" axisLine={{ stroke: '#94a3b8', strokeWidth: 2 }} tickLine={false} tick={{ fill: '#1e293b', fontSize: 11, fontWeight: 900 }} dy={10} />
                     <YAxis axisLine={{ stroke: '#94a3b8', strokeWidth: 2 }} tickLine={false} tick={{ fill: '#1e293b', fontSize: 11, fontWeight: 700 }} />
                     <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f1f5f9', radius: 4 }} />
-                    <Bar 
-                      dataKey={viewType === 'peak' ? 'peakUV' : 'uvIndex'} 
-                      radius={[4, 4, 0, 0]} 
-                      barSize={35}
-                    >
+                    <Bar dataKey={viewType === 'peak' ? 'peakUV' : 'uvIndex'} radius={[4, 4, 0, 0]} barSize={35}>
                       {data.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={getBarColor(viewType === 'peak' ? entry.peakUV : entry.uvIndex)} />
                       ))}
@@ -386,13 +415,7 @@ function App() {
               </div>
               
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 pt-6 border-t border-slate-100">
-                {[
-                  { label: 'Low', color: 'bg-emerald-600' },
-                  { label: 'Mod', color: 'bg-yellow-600' },
-                  { label: 'High', color: 'bg-orange-600' },
-                  { label: 'V.High', color: 'bg-red-600' },
-                  { label: 'Ext', color: 'bg-purple-600' },
-                ].map((level) => (
+                {[{ label: 'Low', color: 'bg-emerald-600' }, { label: 'Mod', color: 'bg-yellow-600' }, { label: 'High', color: 'bg-orange-600' }, { label: 'V.High', color: 'bg-red-600' }, { label: 'Ext', color: 'bg-purple-600' }].map((level) => (
                   <div key={level.label} className="flex items-center gap-2 px-2 py-2 bg-slate-50 rounded-lg border border-slate-200">
                     <div className={`w-2.5 h-2.5 rounded-full ${level.color} shrink-0`} />
                     <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight">{level.label}</span>
@@ -417,11 +440,13 @@ function App() {
 
         <SafetyGuide />
 
-        <footer className="text-center py-6 space-y-2">
+        <footer className="text-center py-6 space-y-4">
           <p className="text-slate-900 text-[10px] font-black uppercase tracking-[0.3em]">Scientific Integrity: NASA POWER</p>
           <div className="space-y-1">
             <p className="text-slate-700 text-[9px] font-black uppercase tracking-widest italic">2026 data unavailable • Verified to Dec 2025</p>
-            <p className="text-slate-500 text-[8px] font-bold uppercase tracking-widest">Global Historical Monthly Solar Statistics</p>
+            <p className="text-slate-500 text-[8px] font-bold uppercase tracking-widest max-w-sm mx-auto leading-relaxed">
+              Disclaimer: Data provides scientific estimates for educational use. Always follow local health authority sun safety guidelines.
+            </p>
           </div>
         </footer>
       </div>
