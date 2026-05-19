@@ -9,18 +9,24 @@ import {
   ResponsiveContainer,
   Cell
 } from 'recharts';
-import { Search, Sun, Loader2, AlertCircle, Calendar, ShieldCheck, MapPin, Info } from 'lucide-react';
-import { getCityCoordinates, getMonthlyUVData, getCitySuggestions, getCityFromCoords } from './services/api';
+import { Search, Sun, Loader2, AlertCircle, Calendar, ShieldCheck, MapPin, Info, Zap, TrendingUp, BarChart2 } from 'lucide-react';
+import { getCityCoordinates, getMonthlyUVData, getCitySuggestions, getCityFromCoords, getCurrentUV } from './services/api';
 import type { MonthlyUV } from './services/api';
 import { Button } from './components/ui/button';
 import { Card, CardContent } from './components/ui/card';
 import { Select } from './components/ui/select-native';
+import { cn } from './lib/utils';
 
 interface CityInfo {
   name: string;
   country: string;
   lat: number;
   lon: number;
+}
+
+interface LiveUV {
+  current: number;
+  todayMax: number;
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -83,17 +89,18 @@ const SafetyGuide = () => (
 function App() {
   const [city, setCity] = useState('');
   const [year, setYear] = useState('2025');
+  const [viewType, setViewType] = useState<'avg' | 'peak'>('peak'); // Default to peak for user expectation
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<MonthlyUV[]>([]);
   const [cityInfo, setCityInfo] = useState<CityInfo | null>(null);
+  const [liveUV, setLiveUV] = useState<LiveUV | null>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestionRef = useRef<HTMLDivElement>(null);
 
   const years = Array.from({ length: 10 }, (_, i) => (2025 - i).toString());
 
-  // Autocomplete logic
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
       if (city.length >= 2 && !cityInfo) {
@@ -105,11 +112,9 @@ function App() {
         setShowSuggestions(false);
       }
     }, 300);
-
     return () => clearTimeout(delayDebounceFn);
   }, [city, cityInfo]);
 
-  // Close suggestions on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (suggestionRef.current && !suggestionRef.current.contains(event.target as Node)) {
@@ -127,11 +132,18 @@ function App() {
       const currentCityInfo = { name, country, lat, lon };
       setCityInfo(currentCityInfo);
       setCity(name);
-      const uvData = await getMonthlyUVData(lat, lon, parseInt(searchYear));
+      
+      const [uvData, liveData] = await Promise.all([
+        getMonthlyUVData(lat, lon, parseInt(searchYear)),
+        getCurrentUV(lat, lon)
+      ]);
+      
       setData(uvData);
+      setLiveUV({ current: liveData.currentUV, todayMax: liveData.todayMax });
     } catch (err: any) {
       setError(err.message || 'An error occurred');
       setData([]);
+      setLiveUV(null);
     } finally {
       setLoading(false);
     }
@@ -147,11 +159,18 @@ function App() {
         currentCityInfo = { name: coords.name, country: coords.country, lat: coords.latitude, lon: coords.longitude };
         setCityInfo(currentCityInfo);
       }
-      const uvData = await getMonthlyUVData(currentCityInfo.lat, currentCityInfo.lon, parseInt(searchYear));
+      
+      const [uvData, liveData] = await Promise.all([
+        getMonthlyUVData(currentCityInfo.lat, currentCityInfo.lon, parseInt(searchYear)),
+        getCurrentUV(currentCityInfo.lat, currentCityInfo.lon)
+      ]);
+      
       setData(uvData);
+      setLiveUV({ current: liveData.currentUV, todayMax: liveData.todayMax });
     } catch (err: any) {
       setError(err.message || 'An error occurred');
       setData([]);
+      setLiveUV(null);
     } finally {
       setLoading(false);
     }
@@ -181,7 +200,6 @@ function App() {
       setError("Geolocation is not supported by your browser");
       return;
     }
-
     setLoading(true);
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -190,7 +208,7 @@ function App() {
           const info = await getCityFromCoords(latitude, longitude);
           fetchDataByCoords(latitude, longitude, info.name, info.country, year);
         } catch (err) {
-          setError("Could not detect your city name, but showing data for your coordinates.");
+          setError("Could not detect your city name, but showing data.");
           const { latitude, longitude } = position.coords;
           fetchDataByCoords(latitude, longitude, "My Location", "", year);
         }
@@ -219,7 +237,7 @@ function App() {
             <h1 className="text-2xl font-black tracking-tight text-slate-900">UV Index</h1>
           </div>
           <p className="text-slate-700 text-[10px] font-black uppercase tracking-[0.2em] hidden md:block">
-            Scientific Archive • NASA
+            NASA Scientific Archive
           </p>
         </header>
 
@@ -241,32 +259,18 @@ function App() {
                     disabled={loading}
                     onFocus={() => city.length >= 2 && setShowSuggestions(true)}
                   />
-                  <button 
-                    type="button"
-                    onClick={handleLocationDetection}
-                    className="p-2 text-slate-400 hover:text-orange-600 transition-colors"
-                    title="Use my location"
-                  >
+                  <button type="button" onClick={handleLocationDetection} className="p-2 text-slate-400 hover:text-orange-600 transition-colors" title="Use my location">
                     <MapPin size={20} />
                   </button>
                 </div>
                 <div className="flex divide-x divide-slate-100 bg-slate-50/50">
                   <div className="relative flex-1 sm:flex-none">
-                    <Select 
-                      value={year} 
-                      onChange={handleYearChange}
-                      className="h-12 w-full sm:w-28 bg-transparent border-none appearance-none pl-10 pr-4 font-black text-sm text-slate-800 cursor-pointer focus:ring-0"
-                      disabled={loading}
-                    >
+                    <Select value={year} onChange={handleYearChange} className="h-12 w-full sm:w-28 bg-transparent border-none appearance-none pl-10 pr-4 font-black text-sm text-slate-800 cursor-pointer focus:ring-0" disabled={loading}>
                       {years.map(y => <option key={y} value={y}>{y}</option>)}
                     </Select>
                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none" size={16} />
                   </div>
-                  <Button 
-                    type="submit" 
-                    disabled={loading || !city.trim()}
-                    className="h-12 px-6 sm:px-8 rounded-none bg-orange-600 hover:bg-orange-700 text-white transition-colors shrink-0 active:scale-95"
-                  >
+                  <Button type="submit" disabled={loading || !city.trim()} className="h-12 px-6 sm:px-8 rounded-none bg-orange-600 hover:bg-orange-700 text-white transition-colors shrink-0 active:scale-95">
                     {loading ? <Loader2 className="animate-spin" size={20} /> : <span className="text-sm font-black uppercase tracking-wider">Search</span>}
                   </Button>
                 </div>
@@ -274,15 +278,10 @@ function App() {
             </CardContent>
           </Card>
 
-          {/* Autocomplete Suggestions */}
           {showSuggestions && suggestions.length > 0 && (
             <div className="absolute z-50 w-full mt-1 bg-white rounded-xl shadow-2xl border border-slate-100 overflow-hidden divide-y divide-slate-50">
               {suggestions.map((s, i) => (
-                <button
-                  key={`${s.name}-${i}`}
-                  onClick={() => handleSuggestionClick(s)}
-                  className="w-full px-5 py-3 text-left hover:bg-slate-50 flex items-center justify-between transition-colors group"
-                >
+                <button key={`${s.name}-${i}`} onClick={() => handleSuggestionClick(s)} className="w-full px-5 py-3 text-left hover:bg-slate-50 flex items-center justify-between transition-colors group">
                   <div className="flex flex-col">
                     <span className="text-sm font-bold text-slate-900">{s.name}</span>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{s.country}</span>
@@ -309,35 +308,77 @@ function App() {
             </div>
           ) : data.length > 0 ? (
             <div className="p-4 sm:p-8 space-y-8 flex-1 flex flex-col">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
                 <div className="space-y-1">
                   <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tighter leading-none italic">{cityInfo?.name}</h2>
                   <div className="flex items-center gap-2">
                     <span className="bg-slate-900 text-white text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest">{cityInfo?.country}</span>
-                    <span className="text-slate-700 text-[10px] font-bold uppercase tracking-widest">{year} Solar intensity</span>
+                    <span className="text-slate-700 text-[10px] font-bold uppercase tracking-widest">{year} Analysis</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100 w-full sm:w-auto">
-                  <div className="bg-orange-100 p-2 rounded-lg">
-                    <Sun className="text-orange-600" size={20} />
+                
+                {liveUV && (
+                  <div className="flex flex-wrap gap-3 w-full lg:w-auto">
+                    <div className="flex-1 sm:flex-none flex items-center gap-3 bg-orange-600 text-white p-3 rounded-xl shadow-lg shadow-orange-100 min-w-[140px]">
+                      <div className="bg-white/20 p-2 rounded-lg">
+                        <Zap size={20} className="fill-white" />
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest leading-none opacity-80">Live UV Now</p>
+                        <p className="text-xl font-black">{liveUV.current.toFixed(1)}</p>
+                      </div>
+                    </div>
+                    <div className="flex-1 sm:flex-none flex items-center gap-3 bg-slate-900 text-white p-3 rounded-xl shadow-lg shadow-slate-100 min-w-[140px]">
+                      <div className="bg-white/10 p-2 rounded-lg text-orange-400">
+                        <Sun size={20} />
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest leading-none opacity-60">Today's Peak</p>
+                        <p className="text-xl font-black">{liveUV.todayMax.toFixed(1)}</p>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none">Peak Index</p>
-                    <p className="text-xl font-black text-slate-900">{Math.max(...data.map(d => d.uvIndex))}</p>
-                  </div>
-                </div>
+                )}
               </div>
 
-              <div className="w-full h-[350px] sm:h-[400px] mt-4">
+              {/* AVG vs PEAK TOGGLE */}
+              <div className="flex items-center justify-between gap-4 bg-slate-50 p-1.5 rounded-2xl border border-slate-100 w-fit">
+                <button
+                  onClick={() => setViewType('peak')}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+                    viewType === 'peak' ? "bg-white text-orange-600 shadow-sm ring-1 ring-slate-200" : "text-slate-400 hover:text-slate-600"
+                  )}
+                >
+                  <TrendingUp size={14} />
+                  Average Peak
+                </button>
+                <button
+                  onClick={() => setViewType('avg')}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+                    viewType === 'avg' ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200" : "text-slate-400 hover:text-slate-600"
+                  )}
+                >
+                  <BarChart2 size={14} />
+                  Monthly Average
+                </button>
+              </div>
+
+              <div className="w-full h-[350px] sm:h-[400px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data} margin={{ top: 20, right: 10, left: -25, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="0" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="month" axisLine={{ stroke: '#94a3b8', strokeWidth: 2 }} tickLine={false} tick={{ fill: '#1e293b', fontSize: 11, fontWeight: 900 }} dy={10} />
                     <YAxis axisLine={{ stroke: '#94a3b8', strokeWidth: 2 }} tickLine={false} tick={{ fill: '#1e293b', fontSize: 11, fontWeight: 700 }} />
                     <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f1f5f9', radius: 4 }} />
-                    <Bar dataKey="uvIndex" radius={[4, 4, 0, 0]} barSize={35}>
+                    <Bar 
+                      dataKey={viewType === 'peak' ? 'peakUV' : 'uvIndex'} 
+                      radius={[4, 4, 0, 0]} 
+                      barSize={35}
+                    >
                       {data.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={getBarColor(entry.uvIndex)} />
+                        <Cell key={`cell-${index}`} fill={getBarColor(viewType === 'peak' ? entry.peakUV : entry.uvIndex)} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -374,7 +415,6 @@ function App() {
           )}
         </Card>
 
-        {/* Safety Guide Section */}
         <SafetyGuide />
 
         <footer className="text-center py-6 space-y-2">
