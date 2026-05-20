@@ -1,13 +1,88 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>uv-index</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="canonical" href="https://sun.kanishkk.xyz/" />
+
+        <!-- ── Primary SEO ───────────────────────────────────────────── -->
+        <title>UV Index — Real-Time & Historical UV Levels for Any City</title>
+        <meta
+            name="description"
+            content="Check real-time UV index and monthly UV history for any city worldwide. Powered by NASA POWER and Open-Meteo. Know when to wear sunscreen, seek shade, or stay indoors."
+        />
+        <meta
+            name="keywords"
+            content="UV index, UV levels, sun safety, sunburn risk, NASA POWER, UV forecast, monthly UV, UV map, UV radiation, UV by city"
+        />
+        <meta name="author" content="Kanishk Pachauri" />
+        <meta name="robots" content="index, follow" />
+        <meta name="theme-color" content="#f97316" />
+
+        <!-- ── Open Graph (Facebook, LinkedIn, WhatsApp, iMessage…) ─── -->
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="UV Index" />
+        <meta property="og:url" content="https://sun.kanishkk.xyz/" />
+        <meta
+            property="og:title"
+            content="UV Index — Real-Time & Historical UV Levels for Any City"
+        />
+        <meta
+            property="og:description"
+            content="Check real-time UV index and monthly UV history for any city worldwide. Powered by NASA POWER and Open-Meteo. Know when to wear sunscreen, seek shade, or stay indoors."
+        />
+        <meta property="og:image" content="https://sun.kanishkk.xyz/demo.png" />
+        <meta
+            property="og:image:alt"
+            content="UV Index dashboard showing monthly UV levels for New Delhi"
+        />
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:locale" content="en_US" />
+
+        <!-- ── Twitter / X Card ──────────────────────────────────────── -->
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta
+            name="twitter:title"
+            content="UV Index — Real-Time & Historical UV Levels for Any City"
+        />
+        <meta
+            name="twitter:description"
+            content="Check real-time UV index and monthly UV history for any city worldwide. Powered by NASA POWER and Open-Meteo."
+        />
+        <meta
+            name="twitter:image"
+            content="https://sun.kanishkk.xyz/demo.png"
+        />
+        <meta
+            name="twitter:image:alt"
+            content="UV Index dashboard showing monthly UV levels for New Delhi"
+        />
+
+        <!-- ── JSON-LD Structured Data ───────────────────────────────── -->
+        <script type="application/ld+json">
+            {
+                "@context": "https://schema.org",
+                "@type": "WebApplication",
+                "name": "UV Index",
+                "url": "https://sun.kanishkk.xyz/",
+                "description": "Check real-time UV index and monthly UV history for any city worldwide. Powered by NASA POWER and Open-Meteo.",
+                "applicationCategory": "HealthApplication",
+                "operatingSystem": "All",
+                "author": {
+                    "@type": "Person",
+                    "name": "Kanishk Pachauri"
+                },
+                "offers": {
+                    "@type": "Offer",
+                    "price": "0",
+                    "priceCurrency": "USD"
+                }
+            }
+        </script>
+    </head>
+    <body>
+        <div id="root"></div>
+        <script type="module" src="/src/main.tsx"></script>
+    </body>
 </html>
