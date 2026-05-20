@@ -11,7 +11,11 @@
 
 <img src="public/demo.png" alt="UV Index Demo" width="800" />
 
----
+## The Problem
+
+I was explaining to children in my neighborhood why playing outside for long hours during the harsh Indian summers can be harmful.
+
+To help them understand *why* the sun feels more dangerous in certain months, I built this project to visually explain how UV radiation changes throughout the year.
 
 ## What it does
 
