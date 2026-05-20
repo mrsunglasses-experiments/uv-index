@@ -34,23 +34,15 @@ export async function getCityCoordinates(city: string) {
 
 export async function getCurrentUV(lat: number, lon: number) {
   const response = await fetch(
-    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=uv_index&daily=uv_index_max&timezone=auto`,
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=uv_index&daily=uv_index_max&timezone=auto`,
   );
   const data = await response.json();
 
-  if (!data.hourly || !data.daily) {
+  if (!data.current || !data.daily) {
     throw new Error("Could not fetch live UV data");
   }
 
-  const now = new Date();
-  const currentHourISO = new Date(now.setMinutes(0, 0, 0))
-    .toISOString()
-    .slice(0, 16);
-
-  const hourIndex = data.hourly.time.findIndex((t: string) =>
-    t.startsWith(currentHourISO),
-  );
-  const currentUV = hourIndex !== -1 ? data.hourly.uv_index[hourIndex] : 0;
+  const currentUV = data.current.uv_index ?? 0;
   const todayMax = data.daily.uv_index_max[0];
 
   return { currentUV, todayMax };
